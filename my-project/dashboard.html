@@ -1,0 +1,268 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Fintech Dashboard</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body class="bg-gray-900 text-white">
+
+<!-- HEADER -->
+<header class="flex justify-between items-center p-6 bg-gray-800 shadow">
+  <h1 class="text-2xl font-bold">Fintech Dashboard</h1>
+  <div class="flex items-center gap-4">
+    <span id="userEmail" class="text-gray-400"></span>
+    <button onclick="logout()" class="px-4 py-2 bg-red-500 rounded hover:bg-red-400">Logout</button>
+  </div>
+</header>
+
+<main class="max-w-6xl mx-auto py-10 px-6 space-y-10">
+
+  <!-- BALANCE + CARDS -->
+  <section class="grid md:grid-cols-3 gap-6">
+    <div class="bg-gray-800 p-6 rounded-xl shadow">
+      <p class="text-gray-400">Current Balance</p>
+      <h2 id="balance" class="text-3xl font-bold mt-2">₦0</h2>
+    </div>
+
+    <div class="bg-gray-800 p-6 rounded-xl shadow space-y-4">
+      <h3 class="font-bold">Cards</h3>
+      <div id="cards" class="space-y-2">
+        <!-- Cards will be injected by JS -->
+      </div>
+      <button onclick="addCard()" class="w-full bg-indigo-600 py-2 rounded hover:bg-indigo-500">+ Add Card</button>
+    </div>
+
+    <div class="bg-gray-800 p-6 rounded-xl shadow">
+      <h3 class="font-bold">Notifications</h3>
+      <ul id="notifications" class="text-gray-400 text-sm space-y-1"></ul>
+    </div>
+  </section>
+
+  <!-- SEND / RECEIVE -->
+<div class="bg-gray-800 p-6 rounded-xl shadow space-y-4">
+  <h3 class="font-bold text-lg">Send Money</h3>
+
+  <label class="block text-gray-400">Select Bank</label>
+  <select id="bankSelect" class="w-full p-3 rounded bg-gray-700 border border-gray-600">
+    <option value="">-- Choose Bank --</option>
+    <option value="First Bank">First Bank</option>
+    <option value="GTBank">GTBank</option>
+    <option value="Zenith Bank">Zenith Bank</option>
+    <option value="Access Bank">Access Bank</option>
+    <option value="UBA">UBA</option>
+  </select>
+
+  <label class="block text-gray-400">Recipient Name</label>
+  <input id="recipientName" type="text" placeholder="Full Name" 
+    class="w-full p-3 rounded bg-gray-700 border border-gray-600">
+
+  <label class="block text-gray-400">Reason / Note</label>
+  <input id="transferReason" type="text" placeholder="E.g., Rent, Bills" 
+    class="w-full p-3 rounded bg-gray-700 border border-gray-600">
+
+  <label class="block text-gray-400">Amount</label>
+  <input id="sendAmount" type="number" placeholder="₦ Amount" 
+    class="w-full p-3 rounded bg-gray-700 border border-gray-600">
+
+  <button onclick="sendMoney()" class="w-full bg-indigo-600 py-2 rounded hover:bg-indigo-500">
+    Send
+  </button>
+</div>
+
+      <input id="sendAmount" type="number" placeholder="Amount" class="w-full p-3 rounded bg-gray-700 border border-gray-600">
+      <button onclick="sendMoney()" class="w-full bg-indigo-600 py-2 rounded hover:bg-indigo-500">Send</button>
+    </div>
+
+    <div class="bg-gray-800 p-6 rounded-xl shadow space-y-4">
+      <h3 class="font-bold text-lg">Receive Money</h3>
+      <input id="receiveAmount" type="number" placeholder="Amount" class="w-full p-3 rounded bg-gray-700 border border-gray-600">
+      <button onclick="receiveMoney()" class="w-full bg-green-600 py-2 rounded hover:bg-green-500">Receive</button>
+    </div>
+  </section>
+
+  <!-- TRANSACTIONS + FILTER -->
+  <section class="bg-gray-800 p-6 rounded-xl shadow space-y-4">
+    <div class="flex justify-between items-center">
+      <h3 class="font-bold text-lg">Transaction History</h3>
+      <select id="filterType" onchange="renderTransactions()" class="p-2 rounded bg-gray-700 text-white">
+        <option value="all">All</option>
+        <option value="sent">Sent</option>
+        <option value="received">Received</option>
+      </select>
+    </div>
+    <ul id="transactions" class="text-gray-300 space-y-2 max-h-64 overflow-y-auto"></ul>
+  </section>
+
+  <!-- SPENDING CHART -->
+  <section class="bg-gray-800 p-6 rounded-xl shadow">
+    <h3 class="font-bold text-lg mb-4">Spending Overview</h3>
+    <canvas id="spendingChart" class="bg-gray-700 p-4 rounded"></canvas>
+  </section>
+
+</main>
+
+<script>
+  // ===== USER AUTH CHECK =====
+  const user = JSON.parse(localStorage.getItem("fintechUser"));
+  if (!localStorage.getItem("loggedIn") || !user) {
+    window.location.href = "fintech.html";
+  }
+  document.getElementById("userEmail").textContent = user.email;
+
+  // ===== BALANCE =====
+  let balance = Number(localStorage.getItem("balance")) || 150000;
+  const balanceEl = document.getElementById("balance");
+
+  function updateBalanceUI() {
+    balanceEl.textContent = `₦${balance.toLocaleString()}`;
+  }
+
+  // ===== TRANSACTIONS =====
+  let transactions = JSON.parse(localStorage.getItem("transactions")) || [];
+
+  function addTransaction(type, amount) {
+    transactions.push({ type, amount, date: new Date().toLocaleString() });
+    localStorage.setItem("transactions", JSON.stringify(transactions));
+    renderTransactions();
+  }
+
+  function renderTransactions() {
+    const filter = document.getElementById("filterType").value;
+    const list = document.getElementById("transactions");
+    list.innerHTML = "";
+    transactions
+      .filter(t => filter === "all" || t.type === filter)
+      .slice().reverse()
+      .forEach(t => {
+        const li = document.createElement("li");
+        li.textContent = `${t.type.toUpperCase()}: ₦${t.amount.toLocaleString()} (${t.date})`;
+        list.appendChild(li);
+      });
+  }
+
+
+  // ===== CARDS =====
+  let cards = JSON.parse(localStorage.getItem("cards")) || [
+    { name: "Main Card", balance }
+  ];
+
+  function renderCards() {
+    const container = document.getElementById("cards");
+    container.innerHTML = "";
+    cards.forEach((c, idx) => {
+      const div = document.createElement("div");
+      div.className = "bg-gray-700 p-3 rounded";
+      div.textContent = `${c.name} - ₦${c.balance.toLocaleString()}`;
+      container.appendChild(div);
+    });
+  }
+ 
+  function addCard() {
+    const name = prompt("Enter card name:");
+    if (!name) return;
+    const card = { name, balance: 0 };
+    cards.push(card);
+    localStorage.setItem("cards", JSON.stringify(cards));
+    renderCards();
+    addNotification(`New card added: ${name}`);
+  }
+
+  // ===== SEND / RECEIVE =====
+  function sendMoney() {
+  const bank = document.getElementById("bankSelect").value;
+  const name = document.getElementById("recipientName").value.trim();
+  const reason = document.getElementById("transferReason").value.trim();
+  const amount = Number(document.getElementById("sendAmount").value);
+
+  // VALIDATION
+  if (!bank) return alert("Please select a bank");
+  if (!name) return alert("Please enter recipient name");
+  if (!amount || amount <= 0 || amount > balance) return alert("Invalid amount");
+
+  // Deduct balance
+  balance -= amount;
+  updateBalanceUI();
+  localStorage.setItem("balance", balance);
+
+  // Add transaction
+  const transactionText = `Sent ₦${amount.toLocaleString()} to ${name} (${bank})` + (reason ? ` - ${reason}` : "");
+  addTransaction("sent", amount);
+
+  // Notification
+  addNotification(transactionText);
+
+  // Clear inputs
+  document.getElementById("bankSelect").value = "";
+  document.getElementById("recipientName").value = "";
+  document.getElementById("transferReason").value = "";
+  document.getElementById("sendAmount").value = "";
+
+  renderChart();
+}
+
+
+  function receiveMoney() {
+    const amount = Number(document.getElementById("receiveAmount").value);
+    if (!amount || amount <= 0) return alert("Invalid amount");
+    balance += amount;
+    updateBalanceUI();
+    addTransaction("received", amount);
+    addNotification(`You received ₦${amount.toLocaleString()}`);
+    localStorage.setItem("balance", balance);
+    document.getElementById("receiveAmount").value = "";
+    renderChart();
+  }
+
+  // ===== NOTIFICATIONS =====
+  const notifEl = document.getElementById("notifications");
+  function addNotification(text) {
+    const li = document.createElement("li");
+    li.textContent = `${new Date().toLocaleTimeString()}: ${text}`;
+    notifEl.prepend(li);
+  }
+
+  // ===== LOGOUT =====
+  function logout() {
+    localStorage.removeItem("loggedIn");
+    window.location.href = "fintech.html";
+  }
+
+  // ===== SPENDING CHART =====
+  const ctx = document.getElementById("spendingChart").getContext("2d");
+  let chart;
+
+  function renderChart() {
+    const sent = transactions.filter(t => t.type === "sent").reduce((a,b) => a+b.amount,0);
+    const received = transactions.filter(t => t.type === "received").reduce((a,b) => a+b.amount,0);
+
+    if(chart) chart.destroy();
+    chart = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: ['Sent', 'Received'],
+        datasets: [{
+          label: 'Amount (₦)',
+          data: [sent, received],
+          backgroundColor: ['#ef4444','#22c55e']
+        }]
+      },
+      options: {
+        responsive:true,
+        plugins: { legend: { display: false } }
+      }
+    });
+  }
+
+  // ===== INIT =====
+  renderCards();
+  renderTransactions();
+  updateBalanceUI();
+  renderChart();
+
+</script>
+
+</body>
+</html>
